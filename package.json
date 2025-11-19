@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "mocha --recursive --exit --timeout 5000"
+    "test": "mocha --recursive --exit --timeout 5000",
+    "db:init": "node scripts/init-db.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

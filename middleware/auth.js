@@ -1,33 +1,22 @@
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+// backend/middleware/auth.js
+const jwt = require("jsonwebtoken");
 
-const SECRET = process.env.JWT_SECRET || 'development_secret_key';
+function auth(req, res, next) {
+  const authHeader = req.headers.authorization;
 
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Missing token' });
-  jwt.verify(token, SECRET, (err, payload) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = payload;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization header missing or invalid" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // attach decoded payload to request
     next();
-  });
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
 }
 
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
-
-const SECRET = process.env.JWT_SECRET || 'development_secret_key';
-
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Missing token' });
-  jwt.verify(token, SECRET, (err, payload) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = payload;
-    next();
-  });
-}
-
-module.exports = { authenticateToken };
+module.exports = auth;

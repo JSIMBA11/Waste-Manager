@@ -1,36 +1,25 @@
-const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
-const db = require('../db/sqlite');
-
+// backend/routes/profile.js
+const express = require("express");
 const router = express.Router();
+const auth = require("../middleware/auth");
+const pool = require("../db");
 
-router.get('/me', authenticateToken, async (req, res) => {
+// Protected profile route
+router.get("/", auth, async (req, res) => {
   try {
-    const user = await db.get('SELECT id, name, phone, email, points, tier, bg_color, created_at, last_login FROM users WHERE id = ?', [req.user.id]);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    const transactions = await db.all('SELECT id, type, points, description, created_at FROM loyalty_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', [user.id]);
-    res.json({ user, transactions });
+    const userId = req.user.id;
+    const result = await pool.query(
+      "SELECT id, email, name, created_at FROM users WHERE id = $1",
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ profile: result.rows[0] });
   } catch (err) {
-    console.error('Profile error', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
-const db = require('../db/sqlite');
-
-const router = express.Router();
-
-router.get('/me', authenticateToken, async (req, res) => {
-  try {
-    const user = await db.get('SELECT id, name, phone, email, points, tier, bg_color, created_at, last_login FROM users WHERE id = ?', [req.user.id]);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    const transactions = await db.all('SELECT id, type, points, description, created_at FROM loyalty_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', [user.id]);
-    res.json({ user, transactions });
-  } catch (err) {
-    console.error('Profile error', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: "Database error", detail: err.message });
   }
 });
 
