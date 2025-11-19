@@ -1,153 +1,105 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-require('dotenv').config();
+// backend/scripts/init-db.js
+require("dotenv").config();
+const { Pool } = require("pg");
 
-const DB_PATH = process.env.DB_FILE || path.resolve(__dirname, '..', 'waste_app.db');
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Failed to open DB', err);
-    process.exit(1);
-  }
+// Debug: show env variables loaded
+console.log("Loaded env:", {
+  PGUSER: process.env.PGUSER,
+  PGHOST: process.env.PGHOST,
+  PGPORT: process.env.PGPORT,
+  PGDATABASE: process.env.PGDATABASE,
 });
 
-const schema = `
-PRAGMA foreign_keys = ON;
+const isProduction = process.env.NODE_ENV === "production";
 
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  phone TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE,
-  password_hash TEXT NOT NULL,
-  points INTEGER DEFAULT 0,
-  bg_color TEXT DEFAULT '#ffffff',
-  tier TEXT DEFAULT 'bronze',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  last_login DATETIME
-);
-
-CREATE TABLE IF NOT EXISTS loyalty_transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  type TEXT NOT NULL,
-  points INTEGER NOT NULL,
-  description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS login_attempts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  phone TEXT NOT NULL,
-  attempts INTEGER DEFAULT 1,
-  last_attempt DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  type TEXT,
-  message TEXT,
-  is_read INTEGER DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS notification_preferences (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  email_enabled INTEGER DEFAULT 1,
-  sms_enabled INTEGER DEFAULT 0,
-  push_enabled INTEGER DEFAULT 0,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-`;
-
-db.exec(schema, (err) => {
-  if (err) {
-    console.error('Failed to run schema', err);
-    db.close(() => process.exit(1));
-    return;
-  }
-  console.log('Database initialized at', DB_PATH);
-  db.close((closeErr) => {
-    if (closeErr) console.error('Error closing DB', closeErr);
-    process.exit(closeErr ? 1 : 0);
-  });
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-require('dotenv').config();
-
-const DB_PATH = process.env.DB_FILE || path.resolve(__dirname, '..', 'waste_app.db');
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Failed to open DB', err);
-    process.exit(1);
-  }
+const pool = new Pool({
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  host: process.env.PGHOST,
+  port: process.env.PGPORT,
+  database: process.env.PGDATABASE,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
-const schema = `
-PRAGMA foreign_keys = ON;
+async function init() {
+  try {
+    console.log("🚀 Starting PostgreSQL schema initialization...");
 
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  phone TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE,
-  password_hash TEXT NOT NULL,
-  points INTEGER DEFAULT 0,
-  bg_color TEXT DEFAULT '#ffffff',
-  tier TEXT DEFAULT 'bronze',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  last_login DATETIME
-);
+    // Force schema to public
+    await pool.query(`SET search_path TO public;`);
 
-CREATE TABLE IF NOT EXISTS loyalty_transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  type TEXT NOT NULL,
-  points INTEGER NOT NULL,
-  description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+    // Test connection
+    const res = await pool.query("SELECT NOW()");
+    console.log("✅ Connected at:", res.rows[0].now);
 
-CREATE TABLE IF NOT EXISTS login_attempts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  phone TEXT NOT NULL,
-  attempts INTEGER DEFAULT 1,
-  last_attempt DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+    // Users
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        phone VARCHAR(20) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        points INTEGER DEFAULT 0,
+        bg_color VARCHAR(20) DEFAULT '#ffffff',
+        tier VARCHAR(50) DEFAULT 'bronze',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP
+      );
+    `);
 
-CREATE TABLE IF NOT EXISTS notifications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  type TEXT,
-  message TEXT,
-  is_read INTEGER DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+    // Loyalty transactions
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.loyalty_transactions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        points INTEGER NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-CREATE TABLE IF NOT EXISTS notification_preferences (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  email_enabled INTEGER DEFAULT 1,
-  sms_enabled INTEGER DEFAULT 0,
-  push_enabled INTEGER DEFAULT 0,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-`;
+    // Login attempts
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.login_attempts (
+        id SERIAL PRIMARY KEY,
+        phone VARCHAR(20) NOT NULL,
+        attempts INTEGER DEFAULT 1,
+        last_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-db.exec(schema, (err) => {
-  if (err) {
-    console.error('Failed to run schema', err);
-    db.close(() => process.exit(1));
-    return;
+    // Notifications
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+        type VARCHAR(50),
+        message TEXT,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Notification preferences
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.notification_preferences (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+        email_enabled BOOLEAN DEFAULT TRUE,
+        sms_enabled BOOLEAN DEFAULT FALSE,
+        push_enabled BOOLEAN DEFAULT FALSE
+      );
+    `);
+
+    console.log("✅ Schema initialized successfully");
+  } catch (err) {
+    console.error("❌ Error initializing DB:", err);
+  } finally {
+    await pool.end();
+    console.log("🔒 Connection closed");
   }
-  console.log('Database initialized at', DB_PATH);
-  db.close((closeErr) => {
-    if (closeErr) console.error('Error closing DB', closeErr);
-    process.exit(closeErr ? 1 : 0);
-  });
-});
+}
+
+init();
