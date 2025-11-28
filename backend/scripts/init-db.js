@@ -2,7 +2,6 @@
 require("dotenv").config();
 const { Pool } = require("pg");
 
-// Debug: show env variables loaded
 console.log("Loaded env:", {
   PGUSER: process.env.PGUSER,
   PGHOST: process.env.PGHOST,
@@ -24,21 +23,19 @@ const pool = new Pool({
 async function init() {
   try {
     console.log("🚀 Starting PostgreSQL schema initialization...");
-
-    // Force schema to public
     await pool.query(`SET search_path TO public;`);
 
-    // Test connection
     const res = await pool.query("SELECT NOW()");
     console.log("✅ Connected at:", res.rows[0].now);
 
-    // Users
+    // Users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.users (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        phone VARCHAR(20) UNIQUE NOT NULL,
-        email VARCHAR(255) UNIQUE,
+        full_name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        phone_number VARCHAR(20),
+        location VARCHAR(100),
         password_hash VARCHAR(255) NOT NULL,
         points INTEGER DEFAULT 0,
         bg_color VARCHAR(20) DEFAULT '#ffffff',
@@ -64,7 +61,7 @@ async function init() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.login_attempts (
         id SERIAL PRIMARY KEY,
-        phone VARCHAR(20) NOT NULL,
+        email VARCHAR(255) NOT NULL,
         attempts INTEGER DEFAULT 1,
         last_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -90,6 +87,19 @@ async function init() {
         email_enabled BOOLEAN DEFAULT TRUE,
         sms_enabled BOOLEAN DEFAULT FALSE,
         push_enabled BOOLEAN DEFAULT FALSE
+      );
+    `);
+
+    // Password resets (for email + SMS flows)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.password_resets (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255),
+        phone_number VARCHAR(20),
+        token VARCHAR(255),
+        code VARCHAR(10),
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

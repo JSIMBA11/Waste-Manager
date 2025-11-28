@@ -1,59 +1,52 @@
 // backend/index.js
-require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const morgan = require("morgan");
 const helmet = require("helmet");
-
-// Import routes
-const authRoutes = require("./routes/auth");
-const profileRoutes = require("./routes/profile");
+const morgan = require("morgan");
+require("dotenv").config();
 
 const app = express();
 
 // -------------------------------
 // Middleware
 // -------------------------------
-app.use(
-  cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
-    credentials: true,
-  })
-);
 app.use(express.json());
-app.use(morgan("dev"));
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || "http://localhost:5173", // ✅ restrict to frontend origin
+  credentials: true,
+}));
 app.use(helmet());
+app.use(morgan("dev")); // ✅ logs every request
 
 // -------------------------------
-// Health check route
+// Routes
 // -------------------------------
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", service: "Usafi-Mtaani Backend" });
+const authRoutes = require("./routes/auth");
+app.use("/api/auth", authRoutes);
+
+// Health check route
+app.get("/", (req, res) => {
+  res.json({ message: "Usafi-Mtaani backend running ✅" });
 });
 
 // -------------------------------
-// API routes
+// Error handling middleware
 // -------------------------------
-app.use("/api/auth", authRoutes);
-app.use("/api/profile", profileRoutes);
-
-// -------------------------------
-// Environment variables
-// -------------------------------
-const PORT = process.env.PORT || 4000;
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  console.warn(
-    "⚠️ Warning: JWT_SECRET not set. Please configure it in your .env or Render environment variables."
-  );
-}
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err.stack || err);
+  res.status(500).json({
+    error: "Internal server error",
+    details: err.message,
+  });
+});
 
 // -------------------------------
 // Start server
 // -------------------------------
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log("====================================");
+  console.log(`🚀 Usafi-Mtaani backend running on port ${PORT}`);
+  console.log(`🌍 API available at http://localhost:${PORT}/api/auth`);
+  console.log("====================================");
 });
-
-module.exports = app;
